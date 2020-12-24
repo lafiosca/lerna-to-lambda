@@ -1,0 +1,13 @@
+{
+  "name": "lerna-to-lambda",
+  "version": "0.1.0",
+  "description": "Build standalone code packages from lerna monorepos",
+  "main": "index.js",
+  "repository": "https://github.com/lafiosca/lerna-to-lambda",
+  "author": "Joe Lafiosca",
+  "license": "MIT",
+  "private": false,
+  "dependencies": {
+    "find-requires": "^1.0.0"
+  }
+}
