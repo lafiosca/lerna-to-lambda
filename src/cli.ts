@@ -2,6 +2,8 @@
 import yargs from 'yargs';
 // import chalk from 'chalk';
 
+import { bundle } from '.';
+
 const options = yargs
 	.usage('Usage: $0 [options]')
 	.example('$0 -b build -o package', 'Bundle `build/index.js` to directory `package`')
@@ -42,10 +44,4 @@ const options = yargs
 	.alias('h', 'help')
 	.argv;
 
-const {
-	basedir,
-	entry,
-	outdir,
-} = options;
-
-console.log(options);
+bundle(options);
