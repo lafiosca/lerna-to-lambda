@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import yargs from 'yargs';
+import yargs, { option } from 'yargs';
 // import chalk from 'chalk';
 
 import { bundle } from '.';
@@ -16,9 +16,9 @@ const options = yargs
 		}
 		return true;
 	})
-	.alias('b', 'basedir')
+	.alias('b', 'base-dir')
 	.default('b', '.')
-	.describe('e', 'Entry point to bundle, relative to basedir')
+	.describe('e', 'Entry point to bundle, relative to base directory')
 	.string('e')
 	.demandOption('e')
 	.check(({ e }) => {
@@ -38,10 +38,20 @@ const options = yargs
 		}
 		return true;
 	})
-	.alias('o', 'outdir')
+	.alias('o', 'out-dir')
 	.default('o', 'lambda')
 	.help('h')
 	.alias('h', 'help')
 	.argv;
 
-bundle(options);
+const {
+	b: baseDir,
+	e: entry,
+	o: outDir,
+} = options;
+
+bundle({
+	baseDir,
+	entry,
+	outDir,
+});
