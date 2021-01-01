@@ -82,11 +82,11 @@ export const resolveImportAtSearchPath = (
 		];
 		while (!foundPath && possiblePaths.length > 0) {
 			const possiblePath = possiblePaths.shift()!;
-			console.log(`Checking if ${possiblePath} exists`);
-			if (fs.existsSync(possiblePath)) {
+			console.log(`Checking if ${possiblePath} exists and is a file`);
+			if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isFile()) {
 				foundPath = possiblePath;
 				importDir = path.dirname(importPath);
-				console.log(`Resolved package module import '${importPath}' to ${foundPath}`);
+				console.log(`Resolved import '${importPath}' to ${foundPath}`);
 			}
 		}
 	}
@@ -94,8 +94,8 @@ export const resolveImportAtSearchPath = (
 	if (!foundPath && !skipPackage) {
 		// Try import path as a package
 		const possiblePath = path.join(searchPath, importPath, 'package.json');
-		console.log(`Checking if ${possiblePath} exists`);
-		if (fs.existsSync(possiblePath)) {
+		console.log(`Checking if ${possiblePath} exists and is a file`);
+		if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isFile()) {
 			// NOTE: Malformed package.json files will throw errors, but that's true of require.resolve too
 			const json = fs.readFileSync(possiblePath, 'utf-8');
 			const mainPath = JSON.parse(json).main; // Extract "main" from the package.json data
@@ -110,7 +110,7 @@ export const resolveImportAtSearchPath = (
 			);
 			if (mainImport) {
 				foundPath = mainImport.resolvedPath;
-				console.log(`Resolved package module import '${importPath}' via ${possiblePath} to ${foundPath}`);
+				console.log(`Resolved import '${importPath}' via ${possiblePath} to ${foundPath}`);
 				importDir = importPath;
 				packageJsonPath = fs.realpathSync(possiblePath);
 			}
@@ -126,11 +126,11 @@ export const resolveImportAtSearchPath = (
 		];
 		while (!foundPath && possiblePaths.length > 0) {
 			const possiblePath = possiblePaths.shift()!;
-			console.log(`Checking if ${possiblePath} exists`);
-			if (fs.existsSync(possiblePath)) {
+			console.log(`Checking if ${possiblePath} exists and is a file`);
+			if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isFile()) {
 				foundPath = possiblePath;
 				importDir = importPath;
-				console.log(`Resolved package module import '${importPath}' to ${foundPath}`);
+				console.log(`Resolved import '${importPath}' to ${foundPath}`);
 			}
 		}
 	}
