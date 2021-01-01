@@ -186,13 +186,16 @@ export const findImportsForFile = (filePath: string): Import[] => (
 		} else {
 			const searchPaths = require.resolve.paths(importPath);
 			if (searchPaths === null) {
-				importType = 'coreModule';
-			} else {
-				importType = 'packageModule';
-				while (!resolved && searchPaths.length > 0) {
-					const searchPath = searchPaths.shift()!;
-					resolved = resolveImportAtSearchPath(importPath, searchPath);
-				}
+				return {
+					importPath,
+					importType: 'coreModule',
+					resolvedPath: importPath,
+				};
+			}
+			importType = 'packageModule';
+			while (!resolved && searchPaths.length > 0) {
+				const searchPath = searchPaths.shift()!;
+				resolved = resolveImportAtSearchPath(importPath, searchPath);
 			}
 		}
 
@@ -275,7 +278,7 @@ export const bundle = ({
 			packageName,
 			importStack = [],
 		} = bundleItems.shift()!;
-		console.log(`Bundle item ${resolvedPath}${packageName ? ` (package: ${packageName})` : ''})`);
+		console.log(`Bundle item ${resolvedPath}${packageName ? ` (package: ${packageName})` : ''}`);
 		if (bundled.has(resolvedPath)) {
 			console.log('already bundled');
 		} else {
