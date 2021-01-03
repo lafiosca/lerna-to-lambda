@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs';
-import { parseScript } from 'esprima';
+import { parse } from 'acorn';
+import { simple as walk } from 'acorn-walk';
 
 export const getRelativePath = (absPath: string, basePath: string): string | undefined => {
 	const parts = absPath.split(path.sep);
@@ -19,29 +20,35 @@ export const getRelativePath = (absPath: string, basePath: string): string | und
 export const findImportPathsForFile = (filePath: string): string[] => {
 	const imports: string[] = [];
 	console.log(`Reading ${filePath}`);
-	const code = fs.readFileSync(filePath, 'utf-8')
-		.replace(/(^#!.*)/, (match) => ' '.repeat(match.length));
+	const code = fs.readFileSync(filePath, 'utf-8');
 	try {
-		parseScript(
+		const parsedCode = parse(
 			code,
-			{ loc: true },
-			(node) => {
-				if (node.type === 'CallExpression'
-					&& node.callee.type === 'Identifier'
-					&& node.callee.name === 'require') {
-					const arg = node.arguments[0];
-					if (!arg) {
-						throw new Error(`Empty require expression at line ${node.loc!.start.line} of ${filePath}`);
+			{
+				ecmaVersion: 'latest',
+				locations: true,
+				allowHashBang: true,
+			},
+		);
+		walk(
+			parsedCode,
+			{
+				CallExpression: (node: any) => {
+					if (node.callee.type === 'Identifier' && node.callee.name === 'require') {
+						const arg = node.arguments[0];
+						if (!arg) {
+							throw new Error(`Empty require expression at line ${node.loc.start.line} of ${filePath}`);
+						}
+						if (arg.type !== 'Literal') {
+							throw new Error(`Non-literal require expression at line ${node.loc.start.line} of ${filePath}`);
+						}
+						const { value } = arg;
+						if (typeof value !== 'string') {
+							throw new Error(`Non-string require expression at line ${node.loc.start.line} of ${filePath}`);
+						}
+						imports.push(value);
 					}
-					if (arg.type !== 'Literal') {
-						throw new Error(`Non-literal require expression at line ${node.loc!.start.line} of ${filePath}`);
-					}
-					const { value } = arg;
-					if (typeof value !== 'string') {
-						throw new Error(`Non-string require expression at line ${node.loc!.start.line} of ${filePath}`);
-					}
-					imports.push(value);
-				}
+				},
 			},
 		);
 	} catch (error) {
