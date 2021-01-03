@@ -99,20 +99,22 @@ export const resolveImportAtSearchPath = (
 			// NOTE: Malformed package.json files will throw errors, but that's true of require.resolve too
 			const json = fs.readFileSync(possiblePath, 'utf-8');
 			const mainPath = JSON.parse(json).main; // Extract "main" from the package.json data
-			if (path.normalize(mainPath).split(path.sep)[0] === '..') {
-				// NOTE: require.resolve seems to allow this, but we won't
-				throw new Error(`Bad "main" path '${mainPath}' in ${possiblePath}`);
-			}
-			const mainImport = resolveImportAtSearchPath(
-				mainPath,
-				path.dirname(possiblePath), // package.json's "main" path is relative to its directory
-				true, // package.json's "main" path cannot refer to another package.json
-			);
-			if (mainImport) {
-				foundPath = mainImport.resolvedPath;
-				console.log(`Resolved import '${importPath}' via ${possiblePath} to ${foundPath}`);
-				importDir = importPath;
-				packageJsonPath = fs.realpathSync(possiblePath);
+			if (mainPath) {
+				if (path.normalize(mainPath).split(path.sep)[0] === '..') {
+					// NOTE: require.resolve seems to allow this, but we won't
+					throw new Error(`Bad "main" path '${mainPath}' in ${possiblePath}`);
+				}
+				const mainImport = resolveImportAtSearchPath(
+					mainPath,
+					path.dirname(possiblePath), // package.json's "main" path is relative to its directory
+					true, // package.json's "main" path cannot refer to another package.json
+				);
+				if (mainImport) {
+					foundPath = mainImport.resolvedPath;
+					console.log(`Resolved import '${importPath}' via ${possiblePath} to ${foundPath}`);
+					importDir = importPath;
+					packageJsonPath = fs.realpathSync(possiblePath);
+				}
 			}
 			// Else: if "main" path is non-existent, the search continues
 		}
@@ -122,6 +124,7 @@ export const resolveImportAtSearchPath = (
 		// Try import path as a directory
 		const possiblePaths = [
 			path.join(searchPath, importPath, 'index.js'),
+			path.join(searchPath, importPath, 'index.json'),
 			path.join(searchPath, importPath, 'index.node'),
 		];
 		while (!foundPath && possiblePaths.length > 0) {
