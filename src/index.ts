@@ -1,391 +1,160 @@
 import path from 'path';
 import fs from 'fs';
-import { parse } from 'acorn';
-import { simple as walk } from 'acorn-walk';
+import resolvePackagePath from 'resolve-package-path';
 
-export const getRelativePath = (absPath: string, basePath: string): string | undefined => {
-	const parts = absPath.split(path.sep);
-	const baseParts = basePath.split(path.sep);
-	while (parts.length > 0 && baseParts.length > 0) {
-		if (parts.shift() !== baseParts.shift()) {
-			return undefined;
-		}
+const getDependencyList = (packageJsonPath: string) => {
+	if (!fs.existsSync(packageJsonPath)) {
+		throw new Error(`Package file '${packageJsonPath}' does not exist`);
 	}
-	if (parts.length === 0) {
-		return undefined;
+	if (!fs.statSync(packageJsonPath).isFile()) {
+		throw new Error(`Package file '${packageJsonPath}' is not a file`);
 	}
-	return parts.join(path.sep);
-};
 
-export const findImportPathsForFile = (filePath: string): string[] => {
-	const imports: string[] = [];
-	console.log(`Reading ${filePath}`);
-	const code = fs.readFileSync(filePath, 'utf-8');
+	let packageJsonRaw: string;
 	try {
-		const parsedCode = parse(
-			code,
-			{
-				ecmaVersion: 'latest',
-				locations: true,
-				allowHashBang: true,
-			},
-		);
-		walk(
-			parsedCode,
-			{
-				CallExpression: (node: any) => {
-					if (node.callee.type === 'Identifier' && node.callee.name === 'require') {
-						const arg = node.arguments[0];
-						if (!arg) {
-							throw new Error(`Empty require expression at line ${node.loc.start.line} of ${filePath}`);
-						}
-						if (arg.type !== 'Literal') {
-							console.warn(`Non-literal require expression at line ${node.loc.start.line} of ${filePath}`);
-						} else {
-							const { value } = arg;
-							if (typeof value !== 'string') {
-								throw new Error(`Non-string require expression at line ${node.loc.start.line} of ${filePath}`);
-							}
-							imports.push(value);
-						}
-					}
-				},
-			},
-		);
+		packageJsonRaw = fs.readFileSync(packageJsonPath, 'utf-8');
 	} catch (error) {
-		throw new Error(`Failed to parse imports from ${filePath}: ${error}`);
+		console.error('Failed to read package file', error);
+		throw new Error(`Failed to read package file '${packageJsonPath}'`);
 	}
-	return imports;
+
+	let packageJson: any;
+	try {
+		packageJson = JSON.parse(packageJsonRaw);
+	} catch (error) {
+		console.error('Failed to parse package file', error);
+		throw new Error(`Failed to parse package file '${packageJsonPath}'`);
+	}
+
+	if (!packageJson || typeof packageJson !== 'object') {
+		throw new Error(`Invalid package specification at '${packageJsonPath}`);
+	}
+
+	const { dependencies } = packageJson;
+	if (dependencies) {
+		if (typeof dependencies !== 'object') {
+			throw new Error(`Invalid dependencies entry in '${packageJsonPath}'`);
+		}
+		return Object.keys(dependencies);
+	}
+
+	return [];
 };
 
-export interface ResolvedImport {
-	/** The real resolved path of the imported file */
-	resolvedPath: string;
-	/** The directory portion of the import path, based on resolution */
-	importDir: string;
-	/** The real path of the import directory */
-	importDirPath: string;
-	/** The real path of package.json used to resolve */
-	packageJsonPath?: string;
-}
-
-export const resolveImportAtSearchPath = (
-	importPath: string,
-	searchPath: string,
-	skipPackage: boolean = false,
-): ResolvedImport | undefined => {
-	console.log(`Searching for ${importPath} in ${searchPath}`);
-
-	let foundPath = '';
-	let importDir = '';
-	let packageJsonPath: string | undefined;
-
-	if (importPath.substr(-1) !== path.sep) {
-		// Try import path as a file
-		const possiblePaths = [
-			path.join(searchPath, importPath),
-			path.join(searchPath, `${importPath}.js`),
-			path.join(searchPath, `${importPath}.json`),
-			path.join(searchPath, `${importPath}.node`),
-		];
-		while (!foundPath && possiblePaths.length > 0) {
-			const possiblePath = possiblePaths.shift()!;
-			if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isFile()) {
-				foundPath = possiblePath;
-				importDir = path.dirname(importPath);
-				console.log(`Resolved import '${importPath}' to ${foundPath}`);
-			}
-		}
-	}
-
-	if (!foundPath && !skipPackage) {
-		// Try import path as a package
-		const possiblePath = path.join(searchPath, importPath, 'package.json');
-		if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isFile()) {
-			// NOTE: Malformed package.json files will throw errors, but that's true of require.resolve too
-			const json = fs.readFileSync(possiblePath, 'utf-8');
-			const mainPath = JSON.parse(json).main; // Extract "main" from the package.json data
-			if (mainPath) {
-				if (path.normalize(mainPath).split(path.sep)[0] === '..') {
-					// NOTE: require.resolve seems to allow this, but we won't
-					throw new Error(`Bad "main" path '${mainPath}' in ${possiblePath}`);
-				}
-				const mainImport = resolveImportAtSearchPath(
-					mainPath,
-					path.dirname(possiblePath), // package.json's "main" path is relative to its directory
-					true, // package.json's "main" path cannot refer to another package.json
-				);
-				if (mainImport) {
-					foundPath = mainImport.resolvedPath;
-					console.log(`Resolved import '${importPath}' via ${possiblePath} to ${foundPath}`);
-					importDir = importPath;
-					packageJsonPath = fs.realpathSync(possiblePath);
-				}
-			}
-			// Else: if "main" path is non-existent, the search continues
-		}
-	}
-
-	if (!foundPath) {
-		// Try import path as a directory
-		const possiblePaths = [
-			path.join(searchPath, importPath, 'index.js'),
-			path.join(searchPath, importPath, 'index.json'),
-			path.join(searchPath, importPath, 'index.node'),
-		];
-		while (!foundPath && possiblePaths.length > 0) {
-			const possiblePath = possiblePaths.shift()!;
-			if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isFile()) {
-				foundPath = possiblePath;
-				importDir = importPath;
-				console.log(`Resolved import '${importPath}' to ${foundPath}`);
-			}
-		}
-	}
-
-	if (!foundPath) {
-		// Couldn't find it
-		return undefined;
-	}
-
-	return {
-		importDir,
-		packageJsonPath,
-		resolvedPath: fs.realpathSync(foundPath),
-		importDirPath: fs.realpathSync(path.join(searchPath, importDir)),
-	};
-};
-
-export type ImportType = 'relative' | 'absolute' | 'packageModule' | 'coreModule';
-
-export interface Import {
-	/** The type of import */
-	importType: ImportType;
-	/** The path of the import, as specified by the require */
-	importPath: string;
-	/** The real resolved path of the import */
-	resolvedPath: string;
-	/**
-	 * If this is a package module import, or if the import path was resolved via a package.json,
-	 * the name of the package as determined from import path
-	 */
-	packageName?: string;
-	/**
-	 * If this is a package module import, or if the import path was resolved via a package.json,
-	 * the real path of the package directory
-	 */
-	packagePath?: string;
-	/** If the import path was resolved via a package.json, the real path of that file */
-	packageJsonPath?: string;
-}
-
-export const findImportsForFile = (filePath: string): Import[] => (
-	findImportPathsForFile(filePath).map((importPath): Import => {
-		let importType: ImportType;
-		let resolved: ResolvedImport | undefined;
-
-		const parts = importPath.split(path.sep);
-		if (parts[0] === '') {
-			importType = 'absolute';
-			resolved = resolveImportAtSearchPath(importPath, '');
-		} else if (parts[0] === '.' || parts[0] === '..') {
-			importType = 'relative';
-			resolved = resolveImportAtSearchPath(importPath, path.dirname(filePath));
-		} else {
-			const searchPaths = require.resolve.paths(importPath);
-			if (searchPaths === null) {
-				return {
-					importPath,
-					importType: 'coreModule',
-					resolvedPath: importPath,
-				};
-			}
-			importType = 'packageModule';
-			while (!resolved && searchPaths.length > 0) {
-				const searchPath = searchPaths.shift()!;
-				resolved = resolveImportAtSearchPath(importPath, searchPath);
-			}
-		}
-
-		if (!resolved) {
-			throw new Error(`Failed to resolve import '${importPath}' in '${filePath}'`);
-		}
-
-		return {
-			importType,
-			importPath,
-			resolvedPath: resolved.resolvedPath,
-			...((importType === 'packageModule' || resolved.packageJsonPath)
-				? {
-					packageName: resolved.importDir,
-					packagePath: resolved.importDirPath,
-					packageJsonPath: resolved.packageJsonPath,
-				}
-				: {}
-			),
-		};
-	})
+const isAncestorPathOf = (ancestorPath: string, childPath: string): boolean => (
+	!path.relative(ancestorPath, childPath).match(/^\.\.(\/|$)/)
 );
 
-const errorWithImportStack = (error: string, importStack: string[]) => {
-	const stackMessage = importStack.map((stackPath) => `\n\tfrom: ${stackPath}`)
-		.join('');
-	return new Error(`${error}${stackMessage}`);
-};
-
-interface BundleItem {
-	/** The absolute path of the resolved import file */
-	resolvedPath: string;
-	/** Package the import comes from, if any */
-	packageName?: string;
-	/** Stack of import paths that led to this one */
-	importStack?: string[];
+interface BundleDependency {
+	/** Name of the package to bundle */
+	packageName: string;
+	/** Path at which the package was imported */
+	importLocation: string;
+	/** Nested dependency stack, if a subdependency */
+	dependencyStack?: string[];
 }
 
-export interface BundleParams {
-	/** The base directory of the code to bundle */
-	baseDir: string;
-	/** The entry point of the code to bundle, relative to the base directory */
-	entry: string;
+const renderDependency = ({
+	packageName,
+	importLocation,
+	dependencyStack,
+}: BundleDependency) => `${[...(dependencyStack ?? []), packageName].join('#')} (${path.relative('.', importLocation)})`;
+
+interface BundleParams {
+	/** The input directory of the code to bundle */
+	inDir: string;
 	/** The output directory for the bundled code */
 	outDir: string;
 }
 
 export const bundle = ({
-	baseDir,
-	entry,
+	inDir,
 	outDir,
 }: BundleParams): void => {
-	const basePath = path.resolve(baseDir);
-	const entryPath = path.resolve(basePath, entry);
-	if (getRelativePath(entryPath, basePath) === undefined) {
-		throw new Error(`Resolved entry path ${entryPath} is located outside of base directory ${baseDir}`);
-	}
-	const outPath = path.resolve(outDir);
-	if (fs.existsSync(outPath)) {
-		throw new Error(`Output directory path ${outPath} already exists`);
+	if (process.env.NODE_PRESERVE_SYMLINKS !== '1') {
+		throw new Error('NODE_PRESERVE_SYMLINKS=1 must be set');
 	}
 
-	console.log(`Creating bundle directory ${outDir}`);
-	fs.mkdirSync(outPath);
+	if (!fs.existsSync(inDir)) {
+		throw new Error(`Input directory ${inDir} does not exist`);
+	}
+	if (!fs.statSync(inDir).isDirectory()) {
+		throw new Error(`Input directory ${inDir} is not a directory`);
+	}
 
-	/** Items remaining to bundle */
-	const bundleItems: BundleItem[] = [{
-		resolvedPath: entryPath,
-	}];
+	if (fs.existsSync(outDir)) {
+		throw new Error(`Output directory ${outDir} already exists`);
+	}
 
-	/** Set of resolved paths that have been bundled */
-	const bundled = new Set<string>();
+	console.log('Checking project dependencies');
+	const mainDependencies = getDependencyList('package.json');
 
-	/** Absolute paths of packages bundled, keyed by package name */
-	const packagePaths: Record<string, string> = {};
+	/** Packages to bundle */
+	const toBundle: BundleDependency[] = mainDependencies.map((packageName) => ({
+		packageName,
+		importLocation: inDir,
+	}));
 
-	while (bundleItems.length > 0) {
+	/** Package paths that have been resolved (absolute, with preserved symlinks) */
+	const resolvedPaths = new Set<string>();
+
+	/** Source paths that have been bundled (absolute, with preserved symlinks) */
+	const bundledPaths: string[] = [];
+
+	/**
+	 * Mapping of destination paths that have been written in the bundle output directory
+	 * to the bundle dependencies that yielded them.
+	 */
+	const bundleDestinations: Record<string, BundleDependency> = {};
+
+	console.log(`Creating bundle output directory ${outDir}`);
+	// fs.mkdirSync(outDir, { recursive: true });
+
+	console.log(`Copying contents of ${inDir} to ${outDir}`);
+	// TODO: copy files
+
+	while (toBundle.length > 0) {
+		const dependency = toBundle.shift()!;
 		const {
-			resolvedPath,
 			packageName,
-			importStack = [],
-		} = bundleItems.shift()!;
-		console.log(`Bundle item ${resolvedPath}${packageName ? ` (package: ${packageName})` : ''}`);
-		if (bundled.has(resolvedPath)) {
-			console.log('already bundled');
-		} else {
-			// Determine where the file should be bundled
-			let itemOutPath: string;
-			if (packageName) {
-				const packagePath = packagePaths[packageName];
-				if (!packagePath) {
-					throw errorWithImportStack(
-						`No package path found for ${packageName}`,
-						importStack,
-					);
+			importLocation,
+			dependencyStack,
+		} = dependency;
+		const resolvedPath = resolvePackagePath(packageName, importLocation);
+		if (!resolvedPath) {
+			throw new Error(`Failed to resolve package path for ${renderDependency(dependency)}`);
+		}
+		if (!resolvedPaths.has(resolvedPath)) {
+			console.log(`Bundle dependency: ${renderDependency(dependency)}`);
+			const packageDirPath = path.dirname(resolvedPath);
+			const bundled = bundledPaths.some((bundledPath) => {
+				if (isAncestorPathOf(bundledPath, packageDirPath)) {
+					console.log(`- Already bundled ${packageDirPath}${bundledPath === packageDirPath ? '' : ` as part of ${bundledPath}`}`);
+					return true;
 				}
-				const relPath = getRelativePath(resolvedPath, packagePath);
-				if (relPath === undefined) {
-					throw errorWithImportStack(
-						`Resolved import path ${resolvedPath} used by package ${packageName} found outside of package directory ${packagePath}`,
-						importStack,
-					);
+				return false;
+			});
+			if (!bundled) {
+				const destPath = `${outDir}/node_modules/${packageName}`;
+				if (bundleDestinations[destPath]) {
+					throw new Error(`Bundle destination conflict at ${destPath}: targeted by ${renderDependency(dependency)}, but already claimed by ${renderDependency(bundleDestinations[destPath])}`);
 				}
-				itemOutPath = path.join(outPath, 'node_modules', packageName, relPath);
-			} else {
-				const relPath = getRelativePath(resolvedPath, basePath);
-				if (relPath === undefined) {
-					throw errorWithImportStack(
-						`Resolved non-package import path ${resolvedPath} found outside of base directory ${basePath}`,
-						importStack,
-					);
-				}
-				itemOutPath = path.join(outPath, relPath);
+				console.log(`- Copying ${path.relative('.', packageDirPath)} to ${destPath}`);
+				// TODO: copy files
+				bundleDestinations[destPath] = dependency;
 			}
-
-			console.log(`Copy ${resolvedPath} to ${itemOutPath}`);
-			// fs.copyFileSync(resolvedPath, itemOutPath);
-
-			if (resolvedPath.match(/\.js$/)) {
-				console.log(`Recursively checking for imports in ${resolvedPath}`);
-				findImportsForFile(resolvedPath).forEach((newImport) => {
-					switch (newImport.importType) {
-						case 'absolute':
-							throw errorWithImportStack(
-								`Absolute import '${newImport.importPath}' found in '${resolvedPath}'`,
-								importStack,
-							);
-						case 'relative':
-							if (newImport.packageName) {
-								throw errorWithImportStack(
-									`Relative import '${newImport.importPath}' found in '${resolvedPath}' refers to another package`,
-									importStack,
-								);
-							}
-							bundleItems.push({
-								packageName,
-								resolvedPath: newImport.resolvedPath,
-								importStack: [
-									resolvedPath,
-									...importStack,
-								],
-							});
-							break;
-						case 'coreModule':
-							/* Do nothing */
-							break;
-						case 'packageModule':
-							if (newImport.packageName && newImport.packagePath) {
-								const existingPackagePath = packagePaths[newImport.packageName];
-								if (existingPackagePath) {
-									if (existingPackagePath !== newImport.packagePath) {
-										throw new Error(`Package path '${newImport.packagePath}' for '${newImport.packageName}' does not match previously found path '${existingPackagePath}'`);
-									}
-								} else {
-									packagePaths[newImport.packageName] = newImport.packagePath;
-								}
-							}
-							if (newImport.packageJsonPath) {
-								bundleItems.push({
-									resolvedPath: newImport.packageJsonPath,
-									packageName: newImport.packageName,
-									importStack: [
-										resolvedPath,
-										...importStack,
-									],
-								});
-							}
-							bundleItems.push({
-								resolvedPath: newImport.resolvedPath,
-								packageName: newImport.packageName,
-								importStack: [
-									resolvedPath,
-									...importStack,
-								],
-							});
-							break;
-						default:
-							// This should never happen
-							throw new Error('Unrecognized import type');
-					}
-				});
+			const subdependencies = getDependencyList(resolvedPath);
+			if (subdependencies.length > 0) {
+				console.log(`- Subdependencies: ${subdependencies.join(', ')}`);
+				toBundle.push(
+					...subdependencies.map((subdependency) => ({
+						packageName: subdependency,
+						importLocation: packageDirPath,
+						dependencyStack: (dependencyStack ?? []).concat(packageName),
+					})),
+				);
 			}
+			resolvedPaths.add(resolvedPath);
 		}
 	}
 };

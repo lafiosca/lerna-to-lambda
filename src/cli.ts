@@ -6,29 +6,18 @@ import { bundle } from '.';
 
 const options = yargs
 	.usage('Usage: $0 [options]')
-	.example('$0 -b build -o package', 'Bundle `build/index.js` to directory `package`')
-	.describe('b', 'Base directory to bundle')
-	.string('b')
-	.demandOption('b')
-	.check(({ b }) => {
-		if (Array.isArray(b)) {
-			throw new Error('Only one base directory may be specified.');
+	.example('$0 -i build -o package', 'Bundle `build` to directory `package`')
+	.describe('i', 'Input directory to bundle')
+	.string('i')
+	.demandOption('i')
+	.check(({ i }) => {
+		if (Array.isArray(i)) {
+			throw new Error('Only one input directory may be specified.');
 		}
 		return true;
 	})
-	.alias('b', 'base-dir')
-	.default('b', '.')
-	.describe('e', 'Entry point to bundle, relative to base directory')
-	.string('e')
-	.demandOption('e')
-	.check(({ e }) => {
-		if (Array.isArray(e)) {
-			throw new Error('Only one entry point may be specified.');
-		}
-		return true;
-	})
-	.alias('e', 'entry')
-	.default('e', 'index.js')
+	.alias('i', 'in-dir')
+	.default('i', '.')
 	.describe('o', 'Output directory for bundle')
 	.string('o')
 	.demandOption('o')
@@ -45,13 +34,11 @@ const options = yargs
 	.argv;
 
 const {
-	b: baseDir,
-	e: entry,
+	i: inDir,
 	o: outDir,
 } = options;
 
 bundle({
-	baseDir,
-	entry,
+	inDir,
 	outDir,
 });

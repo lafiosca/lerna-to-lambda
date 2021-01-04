@@ -20,6 +20,7 @@ module.exports = {
 			ignoreTemplateLiterals: true,
 			ignoreRegExpLiterals: true,
 		}],
+		'import/prefer-default-export': 0,
 		'@typescript-eslint/indent': [2, 'tab', { SwitchCase: 1 }],
 	},
 };
