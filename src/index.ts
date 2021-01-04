@@ -40,13 +40,14 @@ export const findImportPathsForFile = (filePath: string): string[] => {
 							throw new Error(`Empty require expression at line ${node.loc.start.line} of ${filePath}`);
 						}
 						if (arg.type !== 'Literal') {
-							throw new Error(`Non-literal require expression at line ${node.loc.start.line} of ${filePath}`);
+							console.warn(`Non-literal require expression at line ${node.loc.start.line} of ${filePath}`);
+						} else {
+							const { value } = arg;
+							if (typeof value !== 'string') {
+								throw new Error(`Non-string require expression at line ${node.loc.start.line} of ${filePath}`);
+							}
+							imports.push(value);
 						}
-						const { value } = arg;
-						if (typeof value !== 'string') {
-							throw new Error(`Non-string require expression at line ${node.loc.start.line} of ${filePath}`);
-						}
-						imports.push(value);
 					}
 				},
 			},
@@ -89,7 +90,6 @@ export const resolveImportAtSearchPath = (
 		];
 		while (!foundPath && possiblePaths.length > 0) {
 			const possiblePath = possiblePaths.shift()!;
-			console.log(`Checking if ${possiblePath} exists and is a file`);
 			if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isFile()) {
 				foundPath = possiblePath;
 				importDir = path.dirname(importPath);
@@ -101,7 +101,6 @@ export const resolveImportAtSearchPath = (
 	if (!foundPath && !skipPackage) {
 		// Try import path as a package
 		const possiblePath = path.join(searchPath, importPath, 'package.json');
-		console.log(`Checking if ${possiblePath} exists and is a file`);
 		if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isFile()) {
 			// NOTE: Malformed package.json files will throw errors, but that's true of require.resolve too
 			const json = fs.readFileSync(possiblePath, 'utf-8');
@@ -136,7 +135,6 @@ export const resolveImportAtSearchPath = (
 		];
 		while (!foundPath && possiblePaths.length > 0) {
 			const possiblePath = possiblePaths.shift()!;
-			console.log(`Checking if ${possiblePath} exists and is a file`);
 			if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isFile()) {
 				foundPath = possiblePath;
 				importDir = importPath;
