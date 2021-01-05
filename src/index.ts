@@ -127,11 +127,7 @@ export const bundle = ({
 	}
 	fs.copySync(inputDir, outputDir);
 
-	const nodeModulesDir = `${outputDir}/node_modules`;
-	if (verbosity > 1) {
-		console.log(`- Ensuring ${nodeModulesDir} is empty`);
-	}
-	fs.emptyDirSync(nodeModulesDir);
+	const nodeModulesDir = path.join(outputDir, 'node_modules');
 
 	while (toBundle.length > 0) {
 		const dependency = toBundle.shift()!;
@@ -169,7 +165,7 @@ export const bundle = ({
 				return false;
 			});
 			if (!bundled) {
-				const destPath = `${nodeModulesDir}/${packageName}`;
+				const destPath = path.join(nodeModulesDir, packageName);
 				if (verbosity > 1) {
 					console.log(`- Bundle destination: ${destPath}`);
 				}
