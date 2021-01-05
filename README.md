@@ -17,14 +17,14 @@ At the necessary point in your workflow, run a packaging step which executes `l2
 ```
 "scripts": {
   ...
-  "clean": "rimraf build bundle",
+  "clean": "rimraf build lambda",
   "compile": "tsc -p tsconfig.build.json",
-  "package": "l2l -i build -o bundle",
+  "package": "l2l -i build -o lambda",
   "build": "yarn run clean && yarn run compile && yarn run package"
 },
 ```
 
-This `l2l` command will first copy everything from `build` into `bundle` then create a `bundle/node_modules` directory and fill it with all of the dependencies specified in `package.json` as well as all of their recursive subdependencies. By default, `l2l` will omit the `aws-sdk` and subdependencies which strictly originate from it because these are already provided by the standard Lambda containers. The resulting `bundle` directory should be a standalone application which is ready to ship to Lambda.
+This `l2l` command will copy everything from `build` into `lambda`, then populate `lambda/node_modules` with all of the dependencies specified in `package.json` as well as all of their recursive subdependencies. By default, `l2l` will omit the `aws-sdk` and subdependencies which strictly originate from it because these are already provided by the standard Lambda containers. The resulting `lambda` directory should be a standalone application which is ready to ship to Lambda.
 
 ## What It's Not
 

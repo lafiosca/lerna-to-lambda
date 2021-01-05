@@ -5,7 +5,9 @@ import { bundle } from '.';
 
 const options = yargs
 	.usage('Usage: $0 [options]')
-	.example('$0 -i build -o package', 'Bundle `build` to directory `package`')
+	.example('$0', 'Bundle from `build` to `lambda`')
+	.example('$0 -o code -vv', 'Bundle from `build` to `code`, very verbosely')
+	.example('$0 -i dist -o package', 'Bundle from `dist` to `package`')
 	.describe('i', 'Input directory to bundle')
 	.string('i')
 	.demandOption('i')
@@ -16,7 +18,7 @@ const options = yargs
 		return true;
 	})
 	.alias('i', 'input-dir')
-	.default('i', '.')
+	.default('i', 'build')
 	.describe('o', 'Output directory for bundle')
 	.string('o')
 	.demandOption('o')
