@@ -16,7 +16,7 @@ const options = yargs
 		}
 		return true;
 	})
-	.alias('i', 'in-dir')
+	.alias('i', 'input-dir')
 	.default('i', '.')
 	.describe('o', 'Output directory for bundle')
 	.string('o')
@@ -27,18 +27,29 @@ const options = yargs
 		}
 		return true;
 	})
-	.alias('o', 'out-dir')
+	.alias('o', 'output-dir')
 	.default('o', 'lambda')
+	.describe('e', 'Packages to exclude from bundling')
+	.array('e')
+	.alias('e', 'exclude-packages')
+	.default('e', ['aws-sdk'])
+	.describe('v', 'Enable verbose output (multiple v for more)')
+	.count('v')
+	.alias('v', 'verbose')
 	.help('h')
 	.alias('h', 'help')
 	.argv;
 
 const {
-	i: inDir,
-	o: outDir,
+	i: inputDir,
+	o: outputDir,
+	e: excludePackages,
+	v: verbosity,
 } = options;
 
 bundle({
-	inDir,
-	outDir,
+	inputDir,
+	outputDir,
+	excludePackages,
+	verbosity,
 });
