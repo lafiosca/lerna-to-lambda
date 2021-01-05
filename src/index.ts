@@ -1,5 +1,5 @@
 import path from 'path';
-import fs from 'fs';
+import fs from 'fs-extra';
 import resolvePackagePath from 'resolve-package-path';
 
 const getDependencyList = (packageJsonPath: string, excludePackages: string[]) => {
@@ -124,12 +124,12 @@ export const bundle = ({
 	if (verbosity > 0) {
 		console.log(`Creating bundle output directory ${outputDir}`);
 	}
-	// fs.mkdirSync(outDir, { recursive: true });
+	fs.mkdirSync(outputDir, { recursive: true });
 
 	if (verbosity > 0) {
 		console.log(`Copying contents of ${inputDir} to ${outputDir}`);
 	}
-	// TODO: copy files
+	fs.copySync(inputDir, outputDir);
 
 	while (toBundle.length > 0) {
 		const dependency = toBundle.shift()!;
@@ -174,7 +174,8 @@ export const bundle = ({
 				if (bundleDestinations[destPath]) {
 					throw new Error(`Bundle destination conflict at ${destPath}: targeted by ${renderDependency(dependency)}, but already claimed by ${renderDependency(bundleDestinations[destPath])}`);
 				}
-				// TODO: copy files
+				fs.mkdirSync(destPath, { recursive: true });
+				fs.copySync(packageDirPath, destPath);
 				bundledPaths.push(packageDirPath);
 				bundleDestinations[destPath] = dependency;
 			}
