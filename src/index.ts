@@ -81,10 +81,6 @@ export const bundle = ({
 	excludePackages,
 	verbosity,
 }: BundleParams): void => {
-	if (process.env.NODE_PRESERVE_SYMLINKS !== '1') {
-		throw new Error('NODE_PRESERVE_SYMLINKS=1 must be set');
-	}
-
 	if (!fs.existsSync(inputDir)) {
 		throw new Error(`Input directory ${inputDir} does not exist`);
 	}
@@ -131,6 +127,12 @@ export const bundle = ({
 	}
 	fs.copySync(inputDir, outputDir);
 
+	const nodeModulesDir = `${outputDir}/node_modules`;
+	if (verbosity > 1) {
+		console.log(`- Ensuring ${nodeModulesDir} is empty`);
+	}
+	fs.emptyDirSync(nodeModulesDir);
+
 	while (toBundle.length > 0) {
 		const dependency = toBundle.shift()!;
 		const {
@@ -167,7 +169,7 @@ export const bundle = ({
 				return false;
 			});
 			if (!bundled) {
-				const destPath = `${outputDir}/node_modules/${packageName}`;
+				const destPath = `${nodeModulesDir}/${packageName}`;
 				if (verbosity > 1) {
 					console.log(`- Bundle destination: ${destPath}`);
 				}
