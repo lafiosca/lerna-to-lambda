@@ -50,7 +50,7 @@ interface BundleDependency {
 	/** Name of the package to bundle */
 	packageName: string;
 	/** Path at which the package was imported */
-	importLocation: string;
+	importLocation?: string;
 	/** Nested dependency stack, if a subdependency */
 	dependencyStack?: string[];
 }
@@ -62,7 +62,7 @@ const renderDependency = (
 		dependencyStack,
 	}: BundleDependency,
 	withLocation = true,
-) => `${[...(dependencyStack ?? []), packageName].join('#')}${withLocation ? ` (${path.relative('.', importLocation)})` : ''}`;
+) => `${[...(dependencyStack ?? []), packageName].join('#')}${(withLocation && importLocation) ? ` (${path.relative('.', importLocation)})` : ''}`;
 
 interface BundleParams {
 	/** The input directory of the code to bundle */
@@ -101,22 +101,25 @@ export const bundle = ({
 	const mainDependencies = getDependencyList('package.json', excludePackages);
 
 	/** Packages to bundle */
-	const toBundle: BundleDependency[] = mainDependencies.map((packageName) => ({
-		packageName,
-		importLocation: inputDir,
-	}));
+	const toBundle: BundleDependency[] = mainDependencies.map((packageName) => ({ packageName }));
 
-	/** Package paths that have been resolved (absolute, with preserved symlinks) */
+	/** Package paths that have been resolved (absolute) */
 	const resolvedPaths = new Set<string>();
 
-	/** Source paths that have been bundled (absolute, with preserved symlinks) */
+	/**
+	 * Source paths that have been bundled (absolute) with optional hash suffixes
+	 * to disambiguate unhoisted dependencies.
+	 */
 	const bundledPaths: string[] = [];
+
+	/** Mapping of package directory paths to their bundled output directories */
+	const bundleDestinations: Record<string, string> = {};
 
 	/**
 	 * Mapping of destination paths that have been written in the bundle output directory
-	 * to the bundle dependencies that yielded them.
+	 * to the bundle dependencies that claimed them.
 	 */
-	const bundleDestinations: Record<string, BundleDependency> = {};
+	const bundleClaims: Record<string, BundleDependency> = {};
 
 	if (verbosity > 0) {
 		console.log(`Creating bundle output directory ${outputDir}`);
@@ -132,21 +135,36 @@ export const bundle = ({
 
 	while (toBundle.length > 0) {
 		const dependency = toBundle.shift()!;
+		if (verbosity > 1) {
+			console.log(`\nExamine dependency: ${renderDependency(dependency)}`);
+		}
+		if (verbosity > 2) {
+			console.log(`* toBundle:\n\t${toBundle.map((d) => renderDependency(d)).join('\n\t')}`);
+			console.log(`* resolvedPaths:\n\t${Array.from(resolvedPaths).join('\n\t')}`);
+			console.log(`* bundledPaths:\n\t${bundledPaths.join('\n\t')}`);
+			console.log(`* bundleDestinations:\n\t${Object.entries(bundleClaims).map(([p, d]) => `${p}: ${renderDependency(d)}`).join('\n\t')}`);
+		}
 		const {
 			packageName,
 			importLocation,
 			dependencyStack,
 		} = dependency;
-		const resolvedPath = resolvePackagePath(packageName, importLocation);
+		const resolvedPath = resolvePackagePath(packageName, importLocation ?? inputDir);
 		if (!resolvedPath) {
 			throw new Error(`Failed to resolve package path for ${renderDependency(dependency)}`);
 		}
-		if (!resolvedPaths.has(resolvedPath)) {
+		if (verbosity > 1) {
+			console.log(`- Resolved package path to ${resolvedPath}`);
+		}
+		if (resolvedPaths.has(resolvedPath)) {
 			if (verbosity > 1) {
-				console.log(); // add whitespace for very verbose output
+				console.log('- Already bundled, skipping');
 			}
-			if (verbosity > 0) {
-				console.log(`Bundle dependency: ${renderDependency(dependency, verbosity > 1)}`);
+		} else {
+			if (verbosity > 1) {
+				console.log('- Bundle dependency');
+			} else if (verbosity > 0) {
+				console.log(`Bundle dependency: ${renderDependency(dependency, false)}`);
 			}
 			const packageDirPath = path.dirname(resolvedPath);
 			if (verbosity > 1) {
@@ -166,17 +184,35 @@ export const bundle = ({
 				return false;
 			});
 			if (!bundled) {
-				const destPath = path.join(nodeModulesDir, packageName);
+				let destPath = path.join(nodeModulesDir, packageName);
+				let unhoist = false;
 				if (verbosity > 1) {
 					console.log(`- Bundle destination: ${destPath}`);
 				}
-				if (bundleDestinations[destPath]) {
-					throw new Error(`Bundle destination conflict at ${destPath}: targeted by ${renderDependency(dependency)}, but already claimed by ${renderDependency(bundleDestinations[destPath])}`);
+				if (bundleClaims[destPath]) {
+					if (verbosity > 1) {
+						console.log(`- Bundle destination conflict at ${destPath} claimed by ${renderDependency(bundleClaims[destPath])}`);
+					}
+					if (!importLocation || !bundleDestinations[importLocation]) {
+						throw new Error(`Unresolvable bundle destination conflict at ${destPath}${verbosity < 3 ? ' (try -vvv option for details)' : ''}`);
+					}
+					destPath = path.join(bundleDestinations[importLocation], 'node_modules', packageName);
+					if (verbosity > 1) {
+						console.log(`- Unhoisted bundle destination: ${destPath}`);
+					}
+					if (bundleClaims[destPath]) {
+						if (verbosity > 1) {
+							console.log(`- Unhoisted bundle destination conflict at ${destPath} claimed by ${renderDependency(bundleClaims[destPath])}`);
+						}
+						throw new Error(`Unresolvable unhoisted bundle destination conflict at ${destPath}${verbosity < 3 ? ' (try -vvv option for details)' : ''}`);
+					}
+					unhoist = true;
 				}
 				fs.mkdirSync(destPath, { recursive: true });
 				fs.copySync(packageDirPath, destPath);
-				bundledPaths.push(packageDirPath);
-				bundleDestinations[destPath] = dependency;
+				bundledPaths.push(unhoist ? `${packageDirPath}#${importLocation}` : packageDirPath);
+				bundleDestinations[packageDirPath] = destPath;
+				bundleClaims[destPath] = dependency;
 			}
 			const subdependencies = getDependencyList(resolvedPath, excludePackages);
 			if (subdependencies.length > 0) {
