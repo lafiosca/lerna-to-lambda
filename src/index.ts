@@ -93,6 +93,7 @@ export const bundle = ({
 	}
 
 	console.log(`Bundling ${inputDir} and dependencies to ${outputDir}`);
+	console.log(`Excluding dependencies: ${excludePackages.join(', ')}`);
 
 	if (verbosity > 0) {
 		console.log('Checking project dependencies');
