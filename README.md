@@ -24,7 +24,9 @@ At the necessary point in your workflow, run a packaging step which executes `l2
 },
 ```
 
-This `l2l` command will copy everything from `build` into `lambda`, then populate `lambda/node_modules` with all of the dependencies specified in `package.json` as well as all of their recursive subdependencies. By default, `l2l` will omit the `aws-sdk` and subdependencies which strictly originate from it because these are already provided by the standard Lambda containers. The resulting `lambda` directory should be a standalone application which is ready to ship to Lambda.
+This `l2l` command will copy everything from `build` into `lambda`, then populate `lambda/node_modules` with all of the dependencies specified in `package.json` as well as all of their recursive subdependencies. By default, `l2l` will omit the dependency `aws-sdk` and subdependencies which strictly originate from it because these are already provided by the standard Lambda containers. The resulting `lambda` directory should be a standalone application which is ready to ship to Lambda.
+
+Running `yarn l2l --help` in your project will show the full list of options.
 
 ## What It's Not
 
