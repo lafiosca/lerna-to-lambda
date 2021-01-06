@@ -18,12 +18,10 @@
 	"license": "MIT",
 	"private": false,
 	"dependencies": {
-		"fs-extra": "^9.0.1",
 		"resolve-package-path": "^3.1.0",
 		"yargs": "^16.2.0"
 	},
 	"devDependencies": {
-		"@types/fs-extra": "^9.0.6",
 		"@types/node": "^14.14.16",
 		"@types/yargs": "^15.0.12",
 		"@typescript-eslint/eslint-plugin": "^4.11.1",

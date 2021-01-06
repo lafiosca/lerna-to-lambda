@@ -1,5 +1,5 @@
 import path from 'path';
-import fs from 'fs-extra';
+import fs from 'fs';
 import resolvePackagePath from 'resolve-package-path';
 
 const getDependencyList = (packageJsonPath: string, excludePackages: string[]) => {
@@ -42,9 +42,25 @@ const getDependencyList = (packageJsonPath: string, excludePackages: string[]) =
 	return [];
 };
 
-const isAncestorPathOf = (ancestorPath: string, childPath: string): boolean => (
-	!path.relative(ancestorPath, childPath).match(/^\.\.(\/|$)/)
-);
+const copyPackage = (source: string, dest: string) => {
+	const dirs = [[source, dest]];
+	while (dirs.length > 0) {
+		const [sourceDir, destDir] = dirs.shift()!;
+		const contents = fs.readdirSync(sourceDir);
+		contents.forEach((item) => {
+			const sourcePath = path.join(sourceDir, item);
+			const destPath = path.join(destDir, item);
+			if (fs.statSync(sourcePath).isDirectory()) {
+				fs.mkdirSync(destPath);
+				if (item !== 'node_modules') {
+					dirs.push([sourcePath, destPath]);
+				}
+			} else {
+				fs.copyFileSync(sourcePath, destPath);
+			}
+		});
+	}
+};
 
 interface BundleDependency {
 	/** Name of the package to bundle */
@@ -129,7 +145,7 @@ export const bundle = ({
 	if (verbosity > 0) {
 		console.log(`Copying contents of ${inputDir} to ${outputDir}`);
 	}
-	fs.copySync(inputDir, outputDir);
+	copyPackage(inputDir, outputDir);
 
 	const nodeModulesDir = path.join(outputDir, 'node_modules');
 
@@ -175,10 +191,6 @@ export const bundle = ({
 					if (verbosity > 1) {
 						console.log('- Already bundled');
 					}
-				} else if (isAncestorPathOf(bundledPath, packageDirPath)) {
-					if (verbosity > 1) {
-						console.log(`- Already bundled as part of ${path.relative('.', bundledPath)}`);
-					}
 					return true;
 				}
 				return false;
@@ -209,7 +221,7 @@ export const bundle = ({
 					unhoist = true;
 				}
 				fs.mkdirSync(destPath, { recursive: true });
-				fs.copySync(packageDirPath, destPath);
+				copyPackage(packageDirPath, destPath);
 				bundledPaths.push(unhoist ? `${packageDirPath}#${importLocation}` : packageDirPath);
 				bundleDestinations[packageDirPath] = destPath;
 				bundleClaims[destPath] = dependency;
