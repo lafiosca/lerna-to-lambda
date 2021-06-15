@@ -6,6 +6,7 @@ import { bundle } from '.';
 const options = yargs
 	.usage('Usage: $0 [options]')
 	.example('$0', 'Bundle from `build` to `lambda`')
+	.example('$0 -f', 'Bundle from `build` to `lambda`, first removing `lambda` if it exists.')
 	.example('$0 -o code -vv', 'Bundle from `build` to `code`, very verbosely')
 	.example('$0 -i dist -o package', 'Bundle from `dist` to `package`')
 	.example('$0 -e aws-sdk other-pkg', 'Bundle, excluding `aws-sdk` and `other-pkg`')
@@ -37,6 +38,8 @@ const options = yargs
 	.array('e')
 	.alias('e', 'exclude-packages')
 	.default('e', ['aws-sdk'])
+	.describe('f', 'Force mode, which deletes the output directory before running')
+	.default('f', false)
 	.describe('v', 'Enable verbose output (multiple v for more)')
 	.count('v')
 	.alias('v', 'verbose')
@@ -48,6 +51,7 @@ const {
 	i: inputDir,
 	o: outputDir,
 	e: excludePackages,
+	f: force,
 	v: verbosity,
 } = options;
 
@@ -55,5 +59,6 @@ bundle({
 	inputDir,
 	outputDir,
 	excludePackages,
+	force,
 	verbosity,
 });
