@@ -87,6 +87,8 @@ interface BundleParams {
 	outputDir: string;
 	/** Packages to exclude from bundling */
 	excludePackages: string[];
+	/** Whether to force deletion of the output directory */
+	force: boolean;
 	/** 0 means quiet, higher numbers are more verbose */
 	verbosity: number;
 }
@@ -95,6 +97,7 @@ export const bundle = ({
 	inputDir,
 	outputDir,
 	excludePackages,
+	force,
 	verbosity,
 }: BundleParams): void => {
 	if (!fs.existsSync(inputDir)) {
@@ -105,7 +108,20 @@ export const bundle = ({
 	}
 
 	if (fs.existsSync(outputDir)) {
-		throw new Error(`Output directory ${outputDir} already exists`);
+		if (force) {
+			if (verbosity > 0) {
+				console.log(`Removing directory ${outputDir}`);
+			}
+			fs.rmdirSync(outputDir, { recursive: true });
+			if (verbosity > 0) {
+				console.log(`Directory ${outputDir} removed`);
+			}
+			
+		} else {
+			throw new Error(`Output directory ${outputDir} already exists`);
+		}
+	} else {
+		console.log(`Output directory ${outputDir} does not already exist`);
 	}
 
 	console.log(`Bundling ${inputDir} and dependencies to ${outputDir}`);
